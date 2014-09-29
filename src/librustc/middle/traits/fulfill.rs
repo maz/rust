@@ -31,32 +31,32 @@ use super::select::SelectionContext;
  * method `select_all_or_error` can be used to report any remaining
  * ambiguous cases as errors.
  */
-pub struct FulfillmentContext {
+pub struct FulfillmentContext<'tcx> {
     // A list of all obligations that have been registered with this
     // fulfillment context.
-    trait_obligations: Vec<Obligation>,
+    trait_obligations: Vec<Obligation<'tcx>>,
 }
 
-impl FulfillmentContext {
-    pub fn new() -> FulfillmentContext {
+impl<'tcx> FulfillmentContext<'tcx> {
+    pub fn new() -> FulfillmentContext<'tcx> {
         FulfillmentContext {
             trait_obligations: Vec::new(),
         }
     }
 
     pub fn register_obligation(&mut self,
-                               tcx: &ty::ctxt,
-                               obligation: Obligation)
+                               tcx: &ty::ctxt<'tcx>,
+                               obligation: Obligation<'tcx>)
     {
         debug!("register_obligation({})", obligation.repr(tcx));
         self.trait_obligations.push(obligation);
     }
 
-    pub fn select_all_or_error<'a,'tcx>(&mut self,
-                                        infcx: &InferCtxt<'a,'tcx>,
-                                        param_env: &ty::ParameterEnvironment,
-                                        typer: &Typer<'tcx>)
-                                        -> Result<(),Vec<FulfillmentError>>
+    pub fn select_all_or_error<'a>(&mut self,
+                                   infcx: &InferCtxt<'a,'tcx>,
+                                   param_env: &ty::ParameterEnvironment<'tcx>,
+                                   typer: &Typer<'tcx>)
+                                   -> Result<(),Vec<FulfillmentError<'tcx>>>
     {
         try!(self.select_where_possible(infcx, param_env, typer));
 
@@ -74,11 +74,11 @@ impl FulfillmentContext {
         }
     }
 
-    pub fn select_where_possible<'a,'tcx>(&mut self,
-                                          infcx: &InferCtxt<'a,'tcx>,
-                                          param_env: &ty::ParameterEnvironment,
-                                          typer: &Typer<'tcx>)
-                                          -> Result<(),Vec<FulfillmentError>>
+    pub fn select_where_possible<'a>(&mut self,
+                                     infcx: &InferCtxt<'a,'tcx>,
+                                     param_env: &ty::ParameterEnvironment<'tcx>,
+                                     typer: &Typer<'tcx>)
+                                     -> Result<(),Vec<FulfillmentError<'tcx>>>
     {
         let tcx = infcx.tcx;
         let mut selcx = SelectionContext::new(infcx, param_env, typer);

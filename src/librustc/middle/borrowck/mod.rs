@@ -241,7 +241,7 @@ struct BorrowStats {
     guaranteed_paths: uint
 }
 
-pub type BckResult<T> = Result<T, BckError>;
+pub type BckResult<'tcx, T> = Result<T, BckError<'tcx>>;
 
 ///////////////////////////////////////////////////////////////////////////
 // Loans and loan paths
@@ -400,10 +400,10 @@ pub enum bckerr_code {
 // Combination of an error code and the categorization of the expression
 // that caused it
 #[deriving(PartialEq)]
-pub struct BckError {
+pub struct BckError<'tcx> {
     span: Span,
     cause: euv::LoanCause,
-    cmt: mc::cmt,
+    cmt: mc::cmt<'tcx>,
     code: bckerr_code
 }
 
@@ -431,7 +431,7 @@ impl<'a, 'tcx> BorrowckCtxt<'a, 'tcx> {
         mc::MemCategorizationContext::new(self.tcx)
     }
 
-    pub fn cat_expr(&self, expr: &ast::Expr) -> mc::cmt {
+    pub fn cat_expr(&self, expr: &ast::Expr) -> mc::cmt<'tcx> {
         match self.mc().cat_expr(expr) {
             Ok(c) => c,
             Err(()) => {
@@ -440,7 +440,7 @@ impl<'a, 'tcx> BorrowckCtxt<'a, 'tcx> {
         }
     }
 
-    pub fn report(&self, err: BckError) {
+    pub fn report(&self, err: BckError<'tcx>) {
         self.span_err(
             err.span,
             self.bckerr_to_string(&err).as_slice());
@@ -578,8 +578,9 @@ impl<'a, 'tcx> BorrowckCtxt<'a, 'tcx> {
             }
         }
 
-        fn move_suggestion(tcx: &ty::ctxt, ty: Ty, default_msg: &'static str)
-                          -> &'static str {
+        fn move_suggestion<'tcx>(tcx: &ty::ctxt<'tcx>, ty: Ty<'tcx>,
+                                 default_msg: &'static str)
+                                 -> &'static str {
             match ty::get(ty).sty {
                 ty::ty_closure(box ty::ClosureTy {
                         store: ty::RegionTraitStore(..),
@@ -622,7 +623,7 @@ impl<'a, 'tcx> BorrowckCtxt<'a, 'tcx> {
         self.tcx.sess.span_help(s, m);
     }
 
-    pub fn bckerr_to_string(&self, err: &BckError) -> String {
+    pub fn bckerr_to_string(&self, err: &BckError<'tcx>) -> String {
         match err.code {
             err_mutbl => {
                 let descr = match err.cmt.note {
@@ -757,7 +758,7 @@ impl<'a, 'tcx> BorrowckCtxt<'a, 'tcx> {
         }
     }
 
-    pub fn note_and_explain_bckerr(&self, err: BckError) {
+    pub fn note_and_explain_bckerr(&self, err: BckError<'tcx>) {
         let code = err.code;
         match code {
             err_mutbl(..) => {
@@ -870,7 +871,7 @@ impl<'a, 'tcx> BorrowckCtxt<'a, 'tcx> {
         result
     }
 
-    pub fn cmt_to_string(&self, cmt: &mc::cmt_) -> String {
+    pub fn cmt_to_string(&self, cmt: &mc::cmt_<'tcx>) -> String {
         self.mc().cmt_to_string(cmt)
     }
 }
@@ -901,7 +902,7 @@ impl DataFlowOperator for LoanDataFlowOperator {
     }
 }
 
-impl Repr for Loan {
+impl<'tcx> Repr<'tcx> for Loan {
     fn repr(&self, tcx: &ty::ctxt) -> String {
         format!("Loan_{}({}, {}, {}-{}, {})",
                  self.index,
@@ -913,7 +914,7 @@ impl Repr for Loan {
     }
 }
 
-impl Repr for LoanPath {
+impl<'tcx> Repr<'tcx> for LoanPath {
     fn repr(&self, tcx: &ty::ctxt) -> String {
         match self {
             &LpVar(id) => {
