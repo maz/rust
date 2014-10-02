@@ -39,7 +39,7 @@ use middle::astencode;
 use middle::lang_items::{LangItem, ExchangeMallocFnLangItem, StartFnLangItem};
 use middle::subst;
 use middle::weak_lang_items;
-use middle::subst::Subst;
+use middle::subst::{Subst, Substs};
 use middle::trans::_match;
 use middle::trans::adt;
 use middle::trans::build::*;
@@ -51,8 +51,8 @@ use middle::trans::cleanup;
 use middle::trans::common::{Block, C_bool, C_bytes_in_context, C_i32, C_integral, C_nil};
 use middle::trans::common::{C_null, C_struct_in_context, C_u64, C_u8, C_uint, C_undef};
 use middle::trans::common::{CrateContext, ExternMap, FunctionContext};
-use middle::trans::common::{NodeInfo, Result, SubstP, monomorphize_type};
-use middle::trans::common::{node_id_type, param_substs, return_type_is_void};
+use middle::trans::common::{NodeInfo, Result, monomorphize_type};
+use middle::trans::common::{node_id_type, return_type_is_void};
 use middle::trans::common::{tydesc_info, type_is_immediate};
 use middle::trans::common::{type_is_zero_size, val_ty};
 use middle::trans::common;
@@ -1435,11 +1435,11 @@ pub fn new_fn_ctxt<'a, 'tcx>(ccx: &'a CrateContext<'a, 'tcx>,
                              id: ast::NodeId,
                              has_env: bool,
                              output_type: Ty<'tcx>,
-                             param_substs: &'a param_substs<'tcx>,
+                             param_substs: &'a Substs<'tcx>,
                              sp: Option<Span>,
                              block_arena: &'a TypedArena<common::BlockS<'a, 'tcx>>)
                              -> FunctionContext<'a, 'tcx> {
-    param_substs.validate();
+    common::validate_substs(param_substs);
 
     debug!("new_fn_ctxt(path={}, id={}, param_substs={})",
            if id == -1 {
@@ -1449,7 +1449,7 @@ pub fn new_fn_ctxt<'a, 'tcx>(ccx: &'a CrateContext<'a, 'tcx>,
            },
            id, param_substs.repr(ccx.tcx()));
 
-    let substd_output_type = output_type.substp(ccx.tcx(), param_substs);
+    let substd_output_type = output_type.subst(ccx.tcx(), param_substs);
     let uses_outptr = type_of::return_uses_outptr(ccx, substd_output_type);
     let debug_context = debuginfo::create_function_debug_context(ccx, id, param_substs, llfndecl);
     let nested_returns = has_nested_returns(ccx.tcx(), id);
@@ -1497,7 +1497,7 @@ pub fn init_function<'a, 'tcx>(fcx: &'a FunctionContext<'a, 'tcx>,
 
     // This shouldn't need to recompute the return type,
     // as new_fn_ctxt did it already.
-    let substd_output_type = output_type.substp(fcx.ccx.tcx(), fcx.param_substs);
+    let substd_output_type = output_type.subst(fcx.ccx.tcx(), fcx.param_substs);
 
     if !return_type_is_void(fcx.ccx, substd_output_type) {
         // If the function returns nil/bot, there is no real return
@@ -1716,7 +1716,7 @@ pub fn finish_fn<'blk, 'tcx>(fcx: &'blk FunctionContext<'blk, 'tcx>,
 
     // This shouldn't need to recompute the return type,
     // as new_fn_ctxt did it already.
-    let substd_retty = retty.substp(fcx.ccx.tcx(), fcx.param_substs);
+    let substd_retty = retty.subst(fcx.ccx.tcx(), fcx.param_substs);
 
     let ret_cx = match fcx.llreturn.get() {
         Some(llreturn) => {
@@ -1790,7 +1790,7 @@ pub fn trans_closure<'a, 'b, 'tcx>(ccx: &CrateContext<'a, 'tcx>,
                                    decl: &ast::FnDecl,
                                    body: &ast::Block,
                                    llfndecl: ValueRef,
-                                   param_substs: &param_substs<'tcx>,
+                                   param_substs: &Substs<'tcx>,
                                    fn_ast_id: ast::NodeId,
                                    _attributes: &[ast::Attribute],
                                    arg_types: Vec<Ty<'tcx>>,
@@ -1922,7 +1922,7 @@ pub fn trans_fn<'a, 'tcx>(ccx: &CrateContext<'a, 'tcx>,
                           decl: &ast::FnDecl,
                           body: &ast::Block,
                           llfndecl: ValueRef,
-                          param_substs: &param_substs<'tcx>,
+                          param_substs: &Substs<'tcx>,
                           id: ast::NodeId,
                           attrs: &[ast::Attribute]) {
     let _s = StatRecorder::new(ccx, ccx.tcx().map.path_to_string(id).to_string());
@@ -1950,7 +1950,7 @@ pub fn trans_enum_variant<'a, 'tcx>(ccx: &CrateContext<'a, 'tcx>,
                                     variant: &ast::Variant,
                                     _args: &[ast::VariantArg],
                                     disr: ty::Disr,
-                                    param_substs: &param_substs<'tcx>,
+                                    param_substs: &Substs<'tcx>,
                                     llfndecl: ValueRef) {
     let _icx = push_ctxt("trans_enum_variant");
 
@@ -2025,7 +2025,7 @@ pub fn trans_named_tuple_constructor<'blk, 'tcx>(mut bcx: Block<'blk, 'tcx>,
 pub fn trans_tuple_struct<'a, 'tcx>(ccx: &CrateContext<'a, 'tcx>,
                                     _fields: &[ast::StructField],
                                     ctor_id: ast::NodeId,
-                                    param_substs: &param_substs<'tcx>,
+                                    param_substs: &Substs<'tcx>,
                                     llfndecl: ValueRef) {
     let _icx = push_ctxt("trans_tuple_struct");
 
@@ -2040,10 +2040,10 @@ pub fn trans_tuple_struct<'a, 'tcx>(ccx: &CrateContext<'a, 'tcx>,
 fn trans_enum_variant_or_tuple_like_struct<'a, 'tcx>(ccx: &CrateContext<'a, 'tcx>,
                                                      ctor_id: ast::NodeId,
                                                      disr: ty::Disr,
-                                                     param_substs: &param_substs<'tcx>,
+                                                     param_substs: &Substs<'tcx>,
                                                      llfndecl: ValueRef) {
     let ctor_ty = ty::node_id_to_type(ccx.tcx(), ctor_id);
-    let ctor_ty = ctor_ty.substp(ccx.tcx(), param_substs);
+    let ctor_ty = ctor_ty.subst(ccx.tcx(), param_substs);
 
     let result_ty = match ty::get(ctor_ty).sty {
         ty::ty_bare_fn(ref bft) => bft.sig.output,
@@ -2216,7 +2216,7 @@ pub fn trans_item(ccx: &CrateContext, item: &ast::Item) {
                                                             &**body,
                                                             item.attrs.as_slice(),
                                                             llfn,
-                                                            &param_substs::empty(),
+                                                            &Substs::trans_empty(),
                                                             item.id,
                                                             None);
                 } else {
@@ -2224,7 +2224,7 @@ pub fn trans_item(ccx: &CrateContext, item: &ast::Item) {
                              &**decl,
                              &**body,
                              llfn,
-                             &param_substs::empty(),
+                             &Substs::trans_empty(),
                              item.id,
                              item.attrs.as_slice());
                 }
