@@ -1793,7 +1793,7 @@ pub fn trans_closure<'a, 'b, 'tcx>(ccx: &CrateContext<'a, 'tcx>,
                                    param_substs: &Substs<'tcx>,
                                    fn_ast_id: ast::NodeId,
                                    _attributes: &[ast::Attribute],
-                                   arg_types: Vec<Ty<'tcx>>,
+                                   arg_types: &[Ty<'tcx>],
                                    output_type: Ty<'tcx>,
                                    abi: Abi,
                                    closure_env: closure::ClosureEnv<'b, 'tcx>) {

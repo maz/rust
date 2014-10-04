@@ -3293,10 +3293,10 @@ pub fn fn_is_variadic(fty: Ty) -> bool {
     }
 }
 
-pub fn ty_fn_sig<'tcx>(fty: Ty<'tcx>) -> FnSig<'tcx> {
+pub fn ty_fn_sig<'tcx>(fty: Ty<'tcx>) -> &'tcx FnSig<'tcx> {
     match get(fty).sty {
-        ty_bare_fn(ref f) => f.sig.clone(),
-        ty_closure(ref f) => f.sig.clone(),
+        ty_bare_fn(ref f) => &f.sig,
+        ty_closure(ref f) => &f.sig,
         ref s => {
             fail!("ty_fn_sig() called on non-fn type: {}", s)
         }
@@ -3313,14 +3313,8 @@ pub fn ty_fn_abi(fty: Ty) -> abi::Abi {
 }
 
 // Type accessors for substructures of types
-pub fn ty_fn_args<'tcx>(fty: Ty<'tcx>) -> Vec<Ty<'tcx>> {
-    match get(fty).sty {
-        ty_bare_fn(ref f) => f.sig.inputs.clone(),
-        ty_closure(ref f) => f.sig.inputs.clone(),
-        ref s => {
-            fail!("ty_fn_args() called on non-fn type: {}", s)
-        }
-    }
+pub fn ty_fn_args<'tcx>(fty: Ty<'tcx>) -> &'tcx [Ty<'tcx>] {
+    ty_fn_sig(fty).inputs.as_slice()
 }
 
 pub fn ty_closure_store(fty: Ty) -> TraitStore {
